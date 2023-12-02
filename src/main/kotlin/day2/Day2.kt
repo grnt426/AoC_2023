@@ -1,6 +1,8 @@
 package day2
 
 import java.io.File
+import kotlin.math.max
+
 enum class CubeColor(s: String) {
     RED("red"),
     GREEN("green"),
@@ -15,9 +17,9 @@ fun main(_args: Array<String>) {
     println("Puzzle 1: ${findPossibleGames("input/day2/input")}")
 
     /**
-     * Solution:
+     * Solution: 71535
      */
-//    println("Puzzle 2: ${findPossibleGames("input/day2/input")}")
+    println("Puzzle 2: ${findFewestCubes("input/day2/input")}")
 }
 
 fun findPossibleGames(filename: String): Int {
@@ -33,6 +35,23 @@ fun findPossibleGames(filename: String): Int {
         }
         if (failed == 0)
             total += gameId
+    }
+    return total
+}
+
+fun findFewestCubes(filename: String): Int {
+    var total = 0
+    File(filename).forEachLine { line ->
+        val pulls = line.substringAfter(":").split(";")
+        val minMap = mutableMapOf(CubeColor.RED to 0, CubeColor.GREEN to 0, CubeColor.BLUE to 0)
+        for (p in pulls) {
+            val colors = extractNumColors(p)
+            colors.asIterable().forEach { (color, count) ->  minMap[color] = max(minMap[color]!!, count)}
+        }
+
+        total += minMap.values.fold(1){
+            acc, ele -> acc * ele
+        }
     }
     return total
 }
