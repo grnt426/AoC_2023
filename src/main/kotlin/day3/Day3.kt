@@ -15,13 +15,12 @@ fun main(_args: Array<String>) {
     println("Puzzle 1: ${sumAdjacent("input/day3/input")}")
 
     /**
-     * Solution:
+     * Solution: 75847567
      */
-//    println("Puzzle 2: ${sumAdjacent("input/day3/input")}")
+    println("Puzzle 2: ${findGearRatios("input/day3/input")}")
 }
 
-fun sumAdjacent(filename: String): Int {
-    var total = 0
+fun readMap(filename: String, onlyAsterisk: Boolean = false): Pair<MutableMap<String, NumEntry>, MutableSet<String>> {
     val gridMap = mutableMapOf<String, NumEntry>()
     val symbolSet = mutableSetOf<String>()
     var row = 0
@@ -38,12 +37,20 @@ fun sumAdjacent(filename: String): Int {
                 }
                 else -> {
                     curEntry = NumEntry(0)
-                    symbolSet.add(coords(row, index))
+                    if ((onlyAsterisk && c == '*') || !onlyAsterisk)
+                        symbolSet.add(coords(row, index))
                 }
             }
         }
         row++
     }
+
+    return Pair(gridMap, symbolSet)
+}
+
+fun sumAdjacent(filename: String): Int {
+    var total = 0
+    val (gridMap, symbolSet) = readMap(filename)
 
     symbolSet.forEach { coords ->
         val (r, c) = coords.split(",")
@@ -54,6 +61,28 @@ fun sumAdjacent(filename: String): Int {
                 total += entry.value
             }
         }
+    }
+
+    return total
+}
+
+fun findGearRatios(filename: String): Int {
+    var total = 0
+    val (gridMap, symbolSet) = readMap(filename, true)
+
+    symbolSet.forEach { coords ->
+        val (r, c) = coords.split(",")
+        val adj = mutableListOf<NumEntry>()
+        getSurrounding(r.toInt(), c.toInt()).forEach { coord ->
+            val entry = gridMap[coord]
+            if (entry != null && !entry.marked) {
+                entry.marked = true
+                adj.add(entry)
+            }
+        }
+
+        if(adj.size == 2)
+            total += adj[0].value * adj[1].value
     }
 
     return total
