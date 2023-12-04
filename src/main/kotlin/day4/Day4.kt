@@ -1,6 +1,7 @@
 package day4
 
 import java.io.File
+import kotlin.math.min
 import kotlin.math.pow
 
 data class Card(val wins: Int, var copies: Int)
@@ -36,9 +37,8 @@ fun playInsaneScratchCardGame(filename: String): Int {
     }
 
     games.forEachIndexed { index, card ->
-        for (w in 1..card.wins) {
-            if (w + index < 202)
-                games[w + index].copies += card.copies + 1
+        for (w in 1..min(card.wins, 202)) {
+            games[w + index].copies += card.copies + 1
         }
     }
 
