@@ -5,6 +5,8 @@ import java.io.File
 data class Seed(var pos: Long, var moved: Boolean)
 data class SeedRange(var range: LongRange, var moved: Boolean)
 
+// this will be a Long with only the most significant bit flipped
+var BIG_ONE = Long.MIN_VALUE
 fun main(_args: Array<String>) {
 
     /**
@@ -20,7 +22,92 @@ fun main(_args: Array<String>) {
     /**
      * Solution:
      */
-    println("Puzzle 2: ${findLowestLocationAmongRanges("input/day5/input")}")
+//    println("Puzzle 2: ${findLowestLocationAmongRanges("input/day5/input")}")
+
+    println("Puzzle 2: ${fuckItBruteForce("input/day5/input")}")
+}
+
+fun fuckItBruteForce(filname: String): Long {
+    /**
+     * We use the 64 bit longs as flags to indicate if a seed is stored in little endian format.
+     * So, array[0] will get the first 64 values,
+     * where 10000000_00000000_00000000_00000000_00000000_00000000_00000000_00000000
+     * or 0x800000000000000
+     * means seed of id "0" is the only one present. Likewise, 0x4000000000000000
+     * means seed of id "1" is the only one present. The array is initialized up to 10B,
+     * which no number in the input exceeds.
+     *
+     * We use a moved array so moved seeds aren't accidentally moved a second time.
+     */
+
+    var processing = LongArray((10_000_000_000L / 64L).toInt()) { 0 }
+    var moved = LongArray((10_000_000_000L / 64L).toInt()) { 0 }
+    var state = "initial"
+    File(filname).forEachLine read@{ line ->
+        if (line.isEmpty())
+            return@read
+        when (state) {
+            "initial" -> { // first line of seeds
+                if (line.contains("map")) {
+                    state = "ranges"
+                } else {
+                    line.split(": ").last().split(" ").chunked(2).map { (s, r) ->
+                        fillRange(processing, s.toLong(), s.toLong() + r.toLong() - 1,  Long.MAX_VALUE)
+                    }
+                }
+            }
+            "ranges" -> {
+
+            }
+        }
+    }
+
+    return 5
+}
+
+fun fillRange(target: LongArray, start: Long, end: Long, value: Long) {
+
+    // handle single bucket case
+    if (start / 64L == end / 64L) {
+        var selector = BIG_ONE.shr((start % 64).toInt())
+        var shifts = 64 - (end % 64) - (start % 64).toInt()
+        while (shifts > 0) {
+            target[(start / 64).toInt()] = target[(start / 64).toInt()] or selector
+            selector = selector.shr(1)
+            shifts--
+        }
+    }
+
+    // handle first bucket potentially unfilled
+    val fillIndexStart = if(start % 64L == 0L) {
+        (start / 64L).toInt()
+    }
+    else {
+        var selector = BIG_ONE.shr((start % 64).toInt())
+        while (selector > 0) {
+            target[(start / 64).toInt()] = target[(start / 64).toInt()] or selector
+            selector = selector.shr(1)
+        }
+        (start / 64L).toInt() + 1
+    }
+
+    // handle last bucket potentially unfilled
+    val fillIndexEnd = if(end % 64L == 0L) {
+        (end / 64L).toInt()
+    }
+    else {
+        var selector = BIG_ONE
+        var shifts = 64 - (end % 64)
+        while (shifts > 0) {
+            target[(end / 64).toInt()] = target[(end / 64).toInt()] or selector
+            selector = selector.shr(1)
+            shifts--
+        }
+        (end / 64L).toInt() - 1
+    }
+
+    // fills non-inclusively
+    target.fill(value, fillIndexStart, fillIndexEnd + 1)
 }
 
 fun findLowestLocationAmongRanges(filname: String): Long {
@@ -42,7 +129,7 @@ fun findLowestLocationAmongRanges(filname: String): Long {
                 }
             }
 
-            "ranges" -> { // seed to soil map section
+            "ranges" -> {
                 if (line.contains("map")) {
                     followedSeeds.forEach { it.moved = false }
                 } else {
