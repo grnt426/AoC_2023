@@ -6,7 +6,10 @@ data class Seed(var pos: Long, var moved: Boolean)
 data class SeedRange(var range: LongRange, var moved: Boolean)
 
 // this will be a Long with only the most significant bit flipped
-var BIG_ONE = Long.MIN_VALUE
+var BIT_CACHE = mutableMapOf<Long, Long>()
+var expectedSeeds = 0L
+var actualPlanted = 0L
+
 fun main(_args: Array<String>) {
 
     /**
@@ -17,7 +20,7 @@ fun main(_args: Array<String>) {
     /**
      * Solution: 46
      */
-    println("Puzzle 2: ${findLowestLocationAmongRanges("input/day5/example")} (example)")
+    println("Puzzle 2: ${fuckItBruteForce("input/day5/example")} (example)")
 
     /**
      * Solution:
@@ -39,9 +42,22 @@ fun fuckItBruteForce(filname: String): Long {
      *
      * We use a moved array so moved seeds aren't accidentally moved a second time.
      */
-
     var processing = LongArray((10_000_000_000L / 64L).toInt()) { 0 }
     var moved = LongArray((10_000_000_000L / 64L).toInt()) { 0 }
+
+    /**
+     * For faster padding of the ends, we use a bit cache, with the assumption that all pads will
+     * either be of the form 00...11..1 or 11..00..0. With this format, we can pad the beginning
+     * and end of a buffer fill operation with two map lookups rather than a series of shifts.
+     */
+    var bitVal = 0L
+    for (l in 0L..63L) {
+        BIT_CACHE.put(l, bitVal)
+        bitVal = bitVal.shl(1) or 1
+    }
+    BIT_CACHE[64] = Long.MIN_VALUE
+
+
     var state = "initial"
     File(filname).forEachLine read@{ line ->
         if (line.isEmpty())
@@ -52,7 +68,8 @@ fun fuckItBruteForce(filname: String): Long {
                     state = "ranges"
                 } else {
                     line.split(": ").last().split(" ").chunked(2).map { (s, r) ->
-                        fillRange(processing, s.toLong(), s.toLong() + r.toLong() - 1,  Long.MAX_VALUE)
+                        expectedSeeds += r.toLong()
+                        fillRange(processing, s.toLong(), s.toLong() + r.toLong() - 1)
                     }
                 }
             }
@@ -62,52 +79,64 @@ fun fuckItBruteForce(filname: String): Long {
         }
     }
 
+    assert(expectedSeeds == actualPlanted) {
+        "the expected number of seeds '$expectedSeeds' does not equal the actual planted '$actualPlanted'"
+    }
+
     return 5
 }
 
-fun fillRange(target: LongArray, start: Long, end: Long, value: Long) {
+fun fillRange(target: LongArray, start: Long, end: Long) {
 
     // handle single bucket case
     if (start / 64L == end / 64L) {
-        var selector = BIG_ONE.shr((start % 64).toInt())
-        var shifts = 64 - (end % 64) - (start % 64).toInt()
-        while (shifts > 0) {
+        var selector = 4611686018427387904L.shr((start % 64).toInt())
+        var shifts = (end - start) % 64
+        println("Planting $shifts seeds in a single bucket")
+        actualPlanted += shifts + 1
+        while (shifts >= 0) {
             target[(start / 64).toInt()] = target[(start / 64).toInt()] or selector
             selector = selector.shr(1)
             shifts--
         }
     }
-
-    // handle first bucket potentially unfilled
-    val fillIndexStart = if(start % 64L == 0L) {
-        (start / 64L).toInt()
-    }
     else {
-        var selector = BIG_ONE.shr((start % 64).toInt())
-        while (selector > 0) {
-            target[(start / 64).toInt()] = target[(start / 64).toInt()] or selector
-            selector = selector.shr(1)
-        }
-        (start / 64L).toInt() + 1
-    }
 
-    // handle last bucket potentially unfilled
-    val fillIndexEnd = if(end % 64L == 0L) {
-        (end / 64L).toInt()
-    }
-    else {
-        var selector = BIG_ONE
-        var shifts = 64 - (end % 64)
-        while (shifts > 0) {
-            target[(end / 64).toInt()] = target[(end / 64).toInt()] or selector
-            selector = selector.shr(1)
-            shifts--
+        val fillIndexStart = if (start % 64L == 0L) {
+            (start / 64L).toInt()
         }
-        (end / 64L).toInt() - 1
-    }
 
-    // fills non-inclusively
-    target.fill(value, fillIndexStart, fillIndexEnd + 1)
+        // handle first bucket potentially unfilled
+        else {
+            val filled = 64 - (start % 64)
+            println("Planting $filled seeds in an unfilled start bucket")
+            actualPlanted += filled
+            target[(start / 64).toInt()] = BIT_CACHE[filled]!!
+            (start / 64L).toInt() + 1
+        }
+
+
+        val fillIndexEnd = if (end % 64L == 0L) {
+            (end / 64L).toInt()
+        }
+
+        // handle last bucket potentially unfilled
+        else {
+            val filled = 63 - (end % 64)
+            actualPlanted += (end % 64) + 1
+            println("Planting ${(end % 64) + 1} seeds in an unfilled end bucket")
+            target[(end / 64).toInt()] = target[(end / 64).toInt()] or (BIT_CACHE[filled]!!.inv())
+            (end / 64L).toInt() - 1
+        }
+
+        if (fillIndexStart < fillIndexEnd + 1) {
+            // fills non-inclusively
+            val planted = ((fillIndexEnd + 1) - fillIndexStart) * 64
+            actualPlanted += planted
+            println("Planting $planted seeds as full buffer")
+            target.fill(Long.MAX_VALUE, fillIndexStart, fillIndexEnd + 1)
+        }
+    }
 }
 
 fun findLowestLocationAmongRanges(filname: String): Long {
